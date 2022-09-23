@@ -20,7 +20,7 @@ import java.util.function.Supplier;
 
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 class ProblemExampleTest {
 
@@ -55,8 +55,8 @@ class ProblemExampleTest {
     }
 
     @Test
-    @DisplayName("fails while using reactive http client")
-    void failsWhileUsingReactiveHttpClient() {
+    @DisplayName("does not fail when using reactive client")
+    void doesNotFailWhenUsingReactiveClient() {
         //given
         SERVER.addStubMapping(Stubs.anyStub());
 
@@ -69,7 +69,7 @@ class ProblemExampleTest {
         );
 
         //then
-        assertNotNull(throwable); //throws PrematureCloseException: Connection prematurely closed BEFORE response
+        assertNull(throwable);
     }
 
     private <T> Throwable catchThrowable(Supplier<T> supplier) {
