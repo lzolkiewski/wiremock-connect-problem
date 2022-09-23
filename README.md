@@ -1,0 +1,3 @@
+```shell
+./gradlew clean test
+```
