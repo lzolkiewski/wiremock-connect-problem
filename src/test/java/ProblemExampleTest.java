@@ -1,6 +1,9 @@
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.client.WireMock;
+import com.github.tomakehurst.wiremock.common.ConsoleNotifier;
 import com.github.tomakehurst.wiremock.http.JvmProxyConfigurer;
+import io.netty.handler.ssl.SslContext;
+import io.netty.handler.ssl.SslContextBuilder;
 import org.apache.hc.client5.http.ClientProtocolException;
 import org.apache.hc.client5.http.classic.methods.HttpGet;
 import org.apache.hc.client5.http.impl.classic.HttpClientBuilder;
@@ -8,14 +11,17 @@ import org.apache.hc.core5.http.HttpEntity;
 import org.apache.hc.core5.http.ParseException;
 import org.apache.hc.core5.http.io.HttpClientResponseHandler;
 import org.apache.hc.core5.http.io.entity.EntityUtils;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.*;
 import reactor.netty.http.client.HttpClient;
+import reactor.netty.tcp.SslProvider;
+import reactor.netty.transport.ProxyProvider;
 
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.X509TrustManager;
 import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.security.cert.X509Certificate;
 import java.util.function.Supplier;
 
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig;
@@ -24,13 +30,16 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 
 class ProblemExampleTest {
 
-    private static final String ANY_BASE_URL = "http://any.host.com";
+    private static final String ANY_BASE_URL = "https://any.host.com";
 
     private static final String ANY_PATH = "/doesnt/matter";
 
-    private static final WireMockServer SERVER = new WireMockServer(wireMockConfig().dynamicPort().enableBrowserProxying(true));
+    private static final WireMockServer SERVER = new WireMockServer(wireMockConfig()
+            .dynamicPort()
+            .notifier(new ConsoleNotifier(true))
+            .enableBrowserProxying(true));
 
-    private final HttpClient reactiveHttpClient = HttpClient.create().compress(true).proxyWithSystemProperties();
+    private HttpClient reactiveHttpClient;
 
     private final org.apache.hc.client5.http.classic.HttpClient otherHttpClient = HttpClientBuilder.create().useSystemProperties().build();
 
@@ -39,6 +48,18 @@ class ProblemExampleTest {
         SERVER.start();
         WireMock.configureFor(SERVER.port());
         JvmProxyConfigurer.configureFor(SERVER);
+    }
+
+    @BeforeEach
+    void setupEach() throws Exception {
+        final SslContext sslContext = buildTrustAllSslContext();
+        reactiveHttpClient = HttpClient.create()
+                .secure(ssl ->
+                        ssl.sslContext(sslContext)
+                )
+                .compress(true)
+                .proxy(typeSpec -> typeSpec.type(ProxyProvider.Proxy.HTTP)
+                        .address(InetSocketAddress.createUnresolved("localhost", SERVER.port())));
     }
 
     @AfterAll
@@ -111,5 +132,20 @@ class ProblemExampleTest {
                 throw new ClientProtocolException(ex);
             }
         };
+    }
+
+    private static SslContext buildTrustAllSslContext() throws Exception {
+        TrustManager tm = new X509TrustManager() {
+            public void checkClientTrusted(X509Certificate[] chain, String authType)  {
+            }
+
+            public void checkServerTrusted(X509Certificate[] chain, String authType)  {
+            }
+
+            public X509Certificate[] getAcceptedIssuers() {
+                return null;
+            }
+        };
+        return SslContextBuilder.forClient().trustManager(tm).build();
     }
 }
